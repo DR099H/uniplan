@@ -1,0 +1,16 @@
+node_modules/
+data/
+backups/
+.claude/
+.env
+*.log
+*.tmp
+*.db
+*.sqlite
+*.dump.sql
+*dump.sql
+.temp-generate-git-history.js
+
+# Рабочие материалы и отчёты (исключены из публичного репозитория)
+for_schedule/
+reports/
