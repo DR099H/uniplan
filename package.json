@@ -1,0 +1,21 @@
+{
+  "name": "uniplan",
+  "version": "1.0.0",
+  "description": "UniPlan — расписание пар вуза с 1-й/2-й неделей и TODO-листом по дням",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test",
+    "reset": "node --disable-warning=ExperimentalWarning server/server.js --reset-only",
+    "manage": "node --disable-warning=ExperimentalWarning server/manage.js",
+    "build": "node tools/build.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "sqlite": "^5.1.1"
+  }
+}
