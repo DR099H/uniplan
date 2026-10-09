@@ -1,0 +1,202 @@
+// Профиль: карточка студента, имя и группа (US-01), роль, тема оформления, выход.
+
+import { computeCourseAndSemester, todayISO, weekType } from '/shared/week.js?v=20261019_1';
+import { api } from '../api.js?v=20261019_1';
+import { setSession, store, tasks } from '../store.js?v=20261019_1';
+import { ROMAN, esc, fmtDate, icon, initials, showFieldErrors, toast, withBusy } from '../ui.js?v=20261019_1';
+
+const THEME_KEY = 'uniplan-theme';
+const ACCENT_KEY = 'uniplan-accent';
+
+function getThemePref() {
+  try {
+    return localStorage.getItem(THEME_KEY) || 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
+function applyTheme(pref) {
+  try {
+    localStorage.setItem(THEME_KEY, pref);
+  } catch {
+    /* приватный режим — тема просто не запомнится */
+  }
+  const dark = pref === 'dark' || (pref === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+}
+
+function getAccentPref() {
+  try {
+    return localStorage.getItem(ACCENT_KEY) || 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
+function applyAccent(pref) {
+  try {
+    localStorage.setItem(ACCENT_KEY, pref);
+  } catch {}
+  if (!pref || pref === 'auto') {
+    delete document.documentElement.dataset.accent;
+  } else {
+    document.documentElement.dataset.accent = pref;
+  }
+}
+
+/** Штрихкод из логина — детерминированный рисунок для карточки. */
+function barcodeHTML(seed) {
+  let h = 2166136261;
+  for (const ch of seed) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  let html = '';
+  for (let i = 0; i < 32; i++) {
+    h = Math.imul(h ^ (h >>> 13), 2654435761) >>> 0;
+    html += `<i style="width:${1 + (h % 3)}px;margin-right:${1 + ((h >>> 5) % 3)}px"></i>`;
+  }
+  return `<span class="barcode" aria-hidden="true">${html}</span>`;
+}
+
+function roleHTML() {
+  const g = store.group;
+  const starostas = g.starostas || [];
+  if (store.user.role === 'starosta') {
+    return `<p>Вы староста группы <b>${esc(g.name)}</b>: можете добавлять и изменять пары, загружать расписание из JSON и задавать дату начала семестра.</p>
+      <p><a href="#/admin">Перейти к управлению расписанием →</a></p>`;
+  }
+  return `<p>Вы студент группы <b>${esc(g.name)}</b>. ${starostas.length
+    ? `Расписание группы ведёт ${starostas.length > 1 ? 'старосты' : 'староста'}: ${starostas.map(esc).join(', ')}.`
+    : 'У группы пока нет старосты, поэтому расписание может быть не заполнено.'}</p>
+    <p class="hint">Роль старосты назначает администратор приложения.</p>`;
+}
+
+export async function render(root, _params, { refreshShell, logout, go }) {
+  const [{ groups }] = await Promise.all([api.get('/api/groups'), tasks.allLoaded ? null : tasks.loadAll()]);
+  const u = store.user;
+  const isStarosta = u.role === 'starosta';
+  const all = tasks.all();
+  const done = all.filter((t) => t.done).length;
+  const week = weekType(todayISO(), store.group.semesterStart);
+  const pref = getThemePref();
+  const accentPref = getAccentPref();
+  const cs = computeCourseAndSemester(store.group.name, todayISO(), store.group.course, store.group.semester);
+
+  root.innerHTML = `
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">Профиль</h1>
+        <p class="page-sub">Сейчас ${ROMAN[week]} неделя · ${all.length ? `выполнено ${done} из ${all.length} задач` : 'задач пока нет'}</p>
+      </div>
+    </div>
+    <div class="profile-grid">
+      <div style="display:grid;gap:20px;align-content:start">
+        <article class="idcard" aria-label="Карточка студента">
+          <div class="idcard-top"><span>UniPlan · ID</span><span>№ ${String(u.id).padStart(4, '0')}</span></div>
+          <div class="idcard-body">
+            <div class="idcard-photo" aria-hidden="true">${esc(initials(u.name))}</div>
+            <div>
+              <div class="idcard-name">${esc(u.name)}</div>
+              <div class="idcard-rows">
+                <div><span class="k">группа</span><span class="v mono">${esc(store.group.name)}</span></div>
+                <div><span class="k">логин</span><span class="v mono">@${esc(u.login)}</span></div>
+                <div><span class="k">семестр</span><span class="v">${cs.course} курс · ${cs.semester} семестр</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="idcard-foot">
+            ${barcodeHTML(u.login)}
+            <span class="role-badge">${isStarosta ? 'староста' : 'студент'}</span>
+            ${!isStarosta && !u.approved ? '<span class="tag tag-week" style="margin-left:6px;font-size:11px">ждёт одобрения</span>' : ''}
+          </div>
+        </article>
+
+        <section class="card" aria-label="Роль">
+          <h2 class="card-title" style="margin-bottom:10px">${icon('user', 18, 2)} Роль в группе</h2>
+          <div class="role-text">${roleHTML()}</div>
+        </section>
+      </div>
+
+      <div class="settings">
+        <form class="card form-grid" data-form="profile" novalidate>
+          <h2 class="card-title">${icon('pencil', 18, 2)} Данные</h2>
+          <label class="field"><span>Имя и фамилия</span>
+            <input class="input" name="name" maxlength="60" value="${esc(u.name)}" autocomplete="name">
+            <small class="field-error" data-error="name"></small>
+          </label>
+          <label class="field"><span>Группа</span>
+            <select class="input" name="groupId" ${isStarosta ? 'disabled aria-describedby="grp-hint"' : ''}>
+              ${groups.map((g) => `<option value="${g.id}" ${g.id === store.group.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}
+            </select>
+            <small class="hint" id="grp-hint">${isStarosta ? 'Староста закреплён за своей группой' : 'Расписание подстроится под выбранную группу'}</small>
+            <small class="field-error" data-error="groupId"></small>
+          </label>
+          <button class="btn btn-primary" type="submit" style="justify-self:start">Сохранить</button>
+        </form>
+
+        <section class="card form-grid" aria-label="Оформление">
+          <h2 class="card-title">${icon('sun', 18, 2)} Оформление</h2>
+          <div class="field">
+            <span class="field-label">Тема</span>
+            <div class="theme-pick" role="group" aria-label="Тема">
+              <button type="button" data-theme-pick="light" aria-pressed="${pref === 'light'}"><span class="theme-swatch light"></span>Светлая</button>
+              <button type="button" data-theme-pick="dark" aria-pressed="${pref === 'dark'}"><span class="theme-swatch dark"></span>Тёмная</button>
+              <button type="button" data-theme-pick="auto" aria-pressed="${pref === 'auto'}"><span class="theme-swatch auto"></span>Как в системе</button>
+            </div>
+          </div>
+          <div class="field" style="margin-top:4px">
+            <span class="field-label">Акцентный цвет</span>
+            <div class="accent-pick" role="group" aria-label="Акцентный цвет">
+              <button type="button" class="accent-chip" data-accent-pick="auto" aria-pressed="${accentPref === 'auto'}"><span class="accent-dot auto"></span>По неделям</button>
+              <button type="button" class="accent-chip" data-accent-pick="sage" aria-pressed="${accentPref === 'sage'}"><span class="accent-dot sage"></span>Шалфей</button>
+              <button type="button" class="accent-chip" data-accent-pick="lavender" aria-pressed="${accentPref === 'lavender'}"><span class="accent-dot lavender"></span>Лаванда</button>
+              <button type="button" class="accent-chip" data-accent-pick="ocean" aria-pressed="${accentPref === 'ocean'}"><span class="accent-dot ocean"></span>Океан</button>
+              <button type="button" class="accent-chip" data-accent-pick="amber" aria-pressed="${accentPref === 'amber'}"><span class="accent-dot amber"></span>Янтарь</button>
+              <button type="button" class="accent-chip" data-accent-pick="coral" aria-pressed="${accentPref === 'coral'}"><span class="accent-dot coral"></span>Коралл</button>
+            </div>
+          </div>
+        </section>
+
+        <button class="btn" type="button" data-act="logout" style="justify-self:start">${icon('logout', 17, 2)} Выйти</button>
+      </div>
+    </div>`;
+
+  const onClick = (e) => {
+    const pick = e.target.closest('[data-theme-pick]');
+    if (pick) {
+      applyTheme(pick.dataset.themePick);
+      root.querySelectorAll('[data-theme-pick]').forEach((b) => b.setAttribute('aria-pressed', String(b === pick)));
+      return;
+    }
+    const acc = e.target.closest('[data-accent-pick]');
+    if (acc) {
+      applyAccent(acc.dataset.accentPick);
+      root.querySelectorAll('[data-accent-pick]').forEach((b) => b.setAttribute('aria-pressed', String(b === acc)));
+      return;
+    }
+    if (e.target.closest('[data-act="logout"]')) logout();
+  };
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const body = { name: f.elements.name.value };
+    if (!f.elements.groupId.disabled) body.groupId = Number(f.elements.groupId.value);
+    try {
+      const session = await withBusy(f.querySelector('[type="submit"]'), () => api.patch('/api/me', body));
+      const groupChanged = session.group.id !== store.group.id;
+      setSession(session);
+      refreshShell();
+      toast(groupChanged ? `Группа изменена на ${session.group.name}` : 'Сохранено');
+      go('#/profile', { replace: true });
+    } catch (err) {
+      if (!showFieldErrors(f, err)) toast(err.message, 'error');
+    }
+  };
+
+  root.addEventListener('click', onClick);
+  root.addEventListener('submit', onSubmit);
+  return () => {
+    root.removeEventListener('click', onClick);
+    root.removeEventListener('submit', onSubmit);
+  };
+}
