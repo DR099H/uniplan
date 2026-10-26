@@ -1,0 +1,164 @@
+// US-01: вход и регистрация с выбором группы.
+
+import { api } from '../api.js';
+import { store } from '../store.js';
+import { CHECK_SVG, esc, icon, showFieldErrors, withBusy } from '../ui.js';
+
+export async function render(root, { onLogin }) {
+  let mode = 'login';
+  let groups = [];
+  let loadError = '';
+  try {
+    groups = (await api.get('/api/groups')).groups;
+  } catch (err) {
+    loadError = err.message;
+  }
+
+  root.innerHTML = `
+    <div class="auth">
+      <section class="poster" aria-label="О приложении">
+        <span class="logo logo-lg"><span class="logo-mark" aria-hidden="true">U</span><span>Uni<b>Plan</b></span></span>
+        <h1 class="poster-title">Какая сегодня <span class="mark">неделя?</span></h1>
+        <p class="poster-lead">Расписание группы, которое само помнит, первая сейчас неделя или вторая, и список дел на каждый учебный день.</p>
+        <ul class="poster-points">
+          <li style="--i:0"><span class="ic">${icon('calendar', 18, 2)}</span>I и II неделя определяются по дате</li>
+          <li style="--i:1"><span class="ic">${icon('todo', 18, 2)}</span>Дела привязаны к дню и предмету</li>
+          <li style="--i:2"><span class="ic">${icon('upload', 18, 2)}</span>Староста загружает расписание из JSON</li>
+        </ul>
+        <div class="poster-preview" aria-hidden="true">
+          <div class="lesson-card t-lab">
+            <span class="room">7-418</span>
+            <div class="lesson-top"><span class="tag">Лаб. работа</span><span class="tag tag-week">только II</span></div>
+            <h3>Компьютерные сети</h3>
+            <div class="lesson-meta"><span>11:30–13:00 · Савин Д.М.</span></div>
+          </div>
+          <div class="todo-item is-done">
+            <span class="check" aria-checked="true">${CHECK_SVG}</span>
+            <div class="todo-text"><div><span class="todo-label">Оформить отчёт по лабе №2</span></div></div>
+            <span></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card auth-card" aria-label="Вход в UniPlan">
+        <div class="seg" role="tablist" aria-label="Режим">
+          <button type="button" role="tab" data-mode="login" aria-selected="true">Вход</button>
+          <button type="button" role="tab" data-mode="register" aria-selected="false">Регистрация</button>
+        </div>
+        ${loadError ? `<div class="banner banner-error">${icon('alert', 17, 2)}<span>${esc(loadError)}</span></div>` : ''}
+        <div class="banner banner-error" data-form-error hidden></div>
+
+        <form class="form-grid" data-form="login" novalidate>
+          <label class="field"><span>Логин</span>
+            <input class="input" name="login" autocomplete="username" autocapitalize="off" spellcheck="false" required>
+            <small class="field-error" data-error="login"></small>
+          </label>
+          <label class="field"><span>Пароль</span>
+            <input class="input" name="password" type="password" autocomplete="current-password" required>
+            <small class="field-error" data-error="password"></small>
+          </label>
+          <button class="btn btn-primary btn-block" type="submit">Войти ${icon('arrow', 17, 2.4)}</button>
+        </form>
+
+        <form class="form-grid" data-form="register" novalidate hidden>
+          <label class="field"><span>Имя и фамилия</span>
+            <input class="input" name="name" autocomplete="name" maxlength="60" required>
+            <small class="field-error" data-error="name"></small>
+          </label>
+          <label class="field"><span>Группа</span>
+            <select class="input" name="groupId" required>
+              <option value="">Выберите группу</option>
+              ${groups.map((g) => `<option value="${g.id}">${esc(g.name)}</option>`).join('')}
+            </select>
+            <small class="field-error" data-error="groupId"></small>
+          </label>
+          <label class="field"><span>Логин</span>
+            <input class="input" name="login" autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="32" required>
+            <small class="hint">Латиница, цифры, точка, _ или -; от 3 символов</small>
+            <small class="field-error" data-error="login"></small>
+          </label>
+          <label class="field"><span>Пароль</span>
+            <input class="input" name="password" type="password" autocomplete="new-password" minlength="6" required>
+            <small class="hint">Не короче 6 символов</small>
+            <small class="field-error" data-error="password"></small>
+          </label>
+          <button class="btn btn-primary btn-block" type="submit">Создать аккаунт ${icon('arrow', 17, 2.4)}</button>
+          <p class="hint">После регистрации вы — студент группы. Роль старосты назначает администратор.</p>
+        </form>
+
+        ${store.meta?.demo ? `
+          <div class="divider">или посмотреть демо</div>
+          <div class="demo-row">
+            <button class="btn btn-sm" type="button" data-demo="student">${icon('user', 16, 2)} Студент</button>
+            <button class="btn btn-sm btn-week" type="button" data-demo="starosta">${icon('pencil', 16, 2)} Староста</button>
+          </div>` : ''}
+      </section>
+    </div>`;
+
+  const formError = root.querySelector('[data-form-error]');
+  const setError = (msg) => {
+    formError.hidden = !msg;
+    formError.innerHTML = msg ? `${icon('alert', 17, 2)}<span>${esc(msg)}</span>` : '';
+  };
+
+  const switchMode = (next) => {
+    mode = next;
+    root.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === mode)));
+    root.querySelectorAll('[data-form]').forEach((f) => { f.hidden = f.dataset.form !== mode; });
+    setError('');
+    root.querySelector(`[data-form="${mode}"] input`)?.focus();
+  };
+
+  const onClick = async (e) => {
+    const tab = e.target.closest('[data-mode]');
+    if (tab) return switchMode(tab.dataset.mode);
+    const demo = e.target.closest('[data-demo]');
+    if (demo) {
+      setError('');
+      try {
+        await withBusy(demo, async () => onLogin(await api.post('/api/auth/demo', { as: demo.dataset.demo })));
+      } catch (err) {
+        setError(err.message);
+      }
+    }
+  };
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const data = Object.fromEntries(new FormData(form));
+    setError('');
+    showFieldErrors(form, null);
+
+    // быстрая проверка на клиенте; окончательная — на сервере
+    const local = [];
+    if (!data.login?.trim()) local.push({ path: 'login', message: 'Введите логин' });
+    if (!data.password) local.push({ path: 'password', message: 'Введите пароль' });
+    if (mode === 'register') {
+      if ((data.name || '').trim().length < 2) local.push({ path: 'name', message: 'Введите имя (от 2 символов)' });
+      if (!data.groupId) local.push({ path: 'groupId', message: 'Выберите группу' });
+      if (data.password && data.password.length < 6) local.push({ path: 'password', message: 'Пароль должен быть не короче 6 символов' });
+    }
+    if (local.length) {
+      showFieldErrors(form, { details: local });
+      form.querySelector('[aria-invalid="true"]')?.focus();
+      return;
+    }
+
+    const button = form.querySelector('[type="submit"]');
+    try {
+      const url = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+      const body = mode === 'login' ? { login: data.login, password: data.password } : { ...data, groupId: Number(data.groupId) };
+      await withBusy(button, async () => onLogin(await api.post(url, body)));
+    } catch (err) {
+      if (!showFieldErrors(form, err) || err.status === 401) setError(err.message);
+    }
+  };
+
+  root.addEventListener('click', onClick);
+  root.addEventListener('submit', onSubmit);
+  return () => {
+    root.removeEventListener('click', onClick);
+    root.removeEventListener('submit', onSubmit);
+  };
+}
