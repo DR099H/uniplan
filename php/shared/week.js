@@ -1,0 +1,91 @@
+// Работа с датами и определение типа учебной недели.
+// Модуль общий: его импортирует сервер и он же отдаётся клиенту по /shared/week.js.
+// Все даты — строки ISO "YYYY-MM-DD", вычисления идут в UTC, чтобы не зависеть от часового пояса.
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+export function isValidISODate(value) {
+  if (typeof value !== 'string') return false;
+  const m = ISO_RE.exec(value);
+  if (!m) return false;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3];
+}
+
+export function parseISO(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+export function toISO(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+export function addDays(iso, n) {
+  const d = parseISO(iso);
+  d.setUTCDate(d.getUTCDate() + n);
+  return toISO(d);
+}
+
+/** День недели: 1 — понедельник … 7 — воскресенье. */
+export function dayOfWeek(iso) {
+  return ((parseISO(iso).getUTCDay() + 6) % 7) + 1;
+}
+
+/** Понедельник той недели, в которую попадает дата. */
+export function mondayOf(iso) {
+  return addDays(iso, 1 - dayOfWeek(iso));
+}
+
+/**
+ * Тип недели (1 или 2) для даты. Неделя, содержащая дату начала семестра, — первая,
+ * дальше недели чередуются. Для дат до начала семестра чередование продолжается назад.
+ */
+export function weekType(dateIso, semesterStartIso) {
+  const diff = Math.round((parseISO(mondayOf(dateIso)) - parseISO(mondayOf(semesterStartIso))) / (7 * DAY_MS));
+  return ((diff % 2) + 2) % 2 === 0 ? 1 : 2;
+}
+
+/** Сегодняшняя дата по местному времени пользователя. */
+export function todayISO(now = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+}
+
+export function timeToMinutes(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+/**
+ * Вычисляет курс и семестр по названию группы (например, 25ИП3б) и дате.
+ * Шифр группы начинается с двух цифр года поступления (25 -> 2025).
+ * Если в группе явно заданы course и semester, возвращает их.
+ */
+export function computeCourseAndSemester(groupName, dateIso, explicitCourse = null, explicitSemester = null) {
+  if (explicitCourse && explicitSemester) {
+    return { course: Number(explicitCourse), semester: Number(explicitSemester) };
+  }
+  const match = String(groupName || '').match(/^(\d{2})/);
+  if (!match) {
+    return {
+      course: explicitCourse ? Number(explicitCourse) : 1,
+      semester: explicitSemester ? Number(explicitSemester) : 1,
+    };
+  }
+  const admissionYear = 2000 + Number(match[1]);
+  const [curYear, curMonth] = (dateIso || todayISO()).split('-').map(Number);
+  const academicYearDiff = curYear - admissionYear;
+  const isSpring = curMonth < 9;
+
+  let course = isSpring ? academicYearDiff : academicYearDiff + 1;
+  if (course < 1) course = 1;
+  let semester = isSpring ? course * 2 : course * 2 - 1;
+  if (semester < 1) semester = 1;
+
+  return {
+    course: explicitCourse ? Number(explicitCourse) : course,
+    semester: explicitSemester ? Number(explicitSemester) : semester,
+  };
+}

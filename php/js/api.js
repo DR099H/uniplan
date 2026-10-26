@@ -1,0 +1,62 @@
+// Обёртка над fetch для REST API UniPlan (контракт — docs/api-contract.md).
+
+export class ApiError extends Error {
+  constructor(status, message, details = []) {
+    super(message);
+    this.status = status;
+    this.details = details;
+  }
+  /** Ошибка конкретного поля формы, если сервер её прислал. */
+  field(name) {
+    return this.details.find((d) => d.path === name)?.message;
+  }
+}
+
+let onUnauthorized = null;
+export function setUnauthorizedHandler(fn) {
+  onUnauthorized = fn;
+}
+
+function buildApiUrl(url) {
+  if (!url.startsWith('/api/')) return url;
+  const qIndex = url.indexOf('?');
+  if (qIndex >= 0) {
+    return '/index.php?_route=' + encodeURIComponent(url.slice(0, qIndex)) + '&' + url.slice(qIndex + 1);
+  }
+  return '/index.php?_route=' + encodeURIComponent(url);
+}
+
+async function request(method, url, body) {
+  const fetchUrl = buildApiUrl(url);
+  let res;
+  try {
+    res = await fetch(fetchUrl, {
+      method,
+      credentials: 'same-origin',
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new ApiError(0, 'Нет связи с сервером. Проверьте, что он запущен.');
+  }
+  if (res.status === 204) return null;
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    /* пустой ответ */
+  }
+  if (!res.ok) {
+    if (res.status === 401 && onUnauthorized && !url.startsWith('/api/auth/')) onUnauthorized();
+    throw new ApiError(res.status, data?.error || `Ошибка ${res.status}`, data?.details || []);
+  }
+  return data;
+}
+
+export const api = {
+  get: (url) => request('GET', url),
+  post: (url, body = {}) => request('POST', url, body),
+  put: (url, body = {}) => request('PUT', url, body),
+  patch: (url, body = {}) => request('PATCH', url, body),
+  del: (url) => request('DELETE', url),
+};

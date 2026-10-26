@@ -1,0 +1,71 @@
+DirectoryIndex index.php
+RewriteEngine On
+
+# 1. Gzip / Deflate сжатие (сокращает CSS/JS/HTML на 70-80%)
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css
+    AddOutputFilterByType DEFLATE application/javascript text/javascript application/json
+    AddOutputFilterByType DEFLATE image/svg+xml image/x-icon
+</IfModule>
+
+# 2. Кэширование браузера (Browser Caching)
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresDefault "access plus 1 month"
+
+    # HTML ревалидируется при каждом запросе (мгновенно подхватывает новые версии файлов)
+    ExpiresByType text/html "access plus 0 seconds"
+
+    # Статические ресурсы кэшируются на 1 месяц (версионирование ?v= обновляет их при изменении)
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType text/javascript "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/webp "access plus 1 month"
+    ExpiresByType image/x-icon "access plus 1 month"
+    ExpiresByType font/woff2 "access plus 1 year"
+    ExpiresByType font/woff "access plus 1 year"
+</IfModule>
+
+<IfModule mod_headers.c>
+    # Для HTML: проверка свежести ETag / Last-Modified без повторного скачивания (304 Not Modified)
+    <FilesMatch "\.(html|htm)$">
+        Header set Cache-Control "no-cache, must-revalidate"
+        Header unset Pragma
+        Header unset Expires
+    </FilesMatch>
+
+    # Для статических ресурсов: долгий публичный кэш со stale-while-revalidate для мгновенного отклика
+    <FilesMatch "\.(css|js|svg|png|jpg|jpeg|webp|ico|woff|woff2)$">
+        Header set Cache-Control "public, max-age=2592000, stale-while-revalidate=86400"
+        Header unset Pragma
+    </FilesMatch>
+</IfModule>
+
+# 3. Защита служебных файлов
+<FilesMatch "^config\.php$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    # Запрет прямого доступа к внутренним PHP-скриптам и системным каталогам
+    RewriteRule ^api/.*\.php$ - [F,L]
+    RewriteRule ^tools/ - [F,L]
+    RewriteRule ^sql/ - [F,L]
+    RewriteRule ^data/ - [F,L]
+
+    # Прямая отдача существующих статических файлов
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    # Маршрутизация остальных запросов (API и SPA) в index.php
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>
