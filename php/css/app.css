@@ -165,6 +165,8 @@ svg { flex-shrink: 0; }
 .btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 .btn-ghost { background: transparent; border-color: transparent; box-shadow: none; color: var(--ink-2); }
 .btn-ghost:hover { background: var(--hover); color: var(--ink); box-shadow: none; }
+.btn-ghost.is-danger { color: var(--danger); }
+.btn-ghost.is-danger:hover { background: var(--danger-soft); color: var(--danger); }
 .btn-sm { min-height: 36px; padding: 6px 12px; font-size: 13px; border-radius: var(--r-sm); }
 .btn-block { width: 100%; }
 
@@ -194,6 +196,11 @@ svg { flex-shrink: 0; }
   background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r);
   font-size: 16px; transition: border-color .2s, box-shadow .2s;
 }
+.input-wrap { position: relative; display: flex; align-items: center; width: 100%; min-width: 0; }
+.input-wrap .input { padding-right: 42px; }
+.input-eye-btn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: var(--r-sm); color: var(--ink-3); cursor: pointer; padding: 0; transition: color .15s, background-color .15s; }
+.input-eye-btn:hover { color: var(--ink); background: var(--surface-2); }
+.input-eye-btn:focus-visible { outline: 2px solid var(--week); outline-offset: 1px; }
 .input::placeholder { color: var(--ink-3); }
 .input:focus { outline: none; border-color: var(--week); box-shadow: 0 0 0 4px var(--week-soft); }
 .input[aria-invalid="true"] { border-color: var(--danger); box-shadow: 0 0 0 4px var(--danger-soft); }
@@ -1062,11 +1069,30 @@ button.room-more[aria-expanded="true"] {
 .accent-dot.coral { background: #C94C67; }
 
 /* Участники группы в админке */
-.members-list { display: grid; gap: 8px; }
+.members-list { display: grid; gap: 8px; min-width: 0; }
 .member-item {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 10px 14px; background: var(--surface); border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 12px; min-width: 0; box-sizing: border-box;
+}
+@media (max-width: 580px) {
+  .member-item.is-pending {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .member-item.is-pending .member-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+  .member-item.is-pending .member-actions .btn {
+    width: 100%;
+    justify-content: center;
+    padding: 7px 10px;
+    font-size: 13px;
+  }
 }
 .member-item.is-pending {
   background: color-mix(in srgb, var(--w1-soft) 35%, var(--surface));
@@ -1079,8 +1105,8 @@ button.room-more[aria-expanded="true"] {
   display: grid; place-items: center; font: 700 13px/1 var(--font);
   flex-shrink: 0;
 }
-.member-name { font-weight: 600; font-size: 14px; line-height: 1.3; }
-.member-sub { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+.member-name { font-weight: 600; font-size: 14px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; }
+.member-sub { font-size: 12px; color: var(--ink-3); margin-top: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .member-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .todo-empty { padding: 18px; text-align: center; border: 1px dashed var(--border-strong); border-radius: 14px; color: var(--ink-3); font-size: 14px; }
 .stamp-wrap { display: flex; justify-content: center; }

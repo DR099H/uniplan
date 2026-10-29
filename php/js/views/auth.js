@@ -54,7 +54,12 @@ export async function render(root, { onLogin }) {
             <small class="field-error" data-error="login"></small>
           </label>
           <label class="field"><span>Пароль</span>
-            <input class="input" name="password" type="password" autocomplete="current-password" required>
+            <div class="input-wrap">
+              <input class="input" name="password" type="password" autocomplete="current-password" required>
+              <button class="input-eye-btn" type="button" data-act="toggle-password" aria-label="Показать пароль" title="Показать пароль">
+                ${icon('eye', 18, 2)}
+              </button>
+            </div>
             <small class="field-error" data-error="password"></small>
           </label>
           <button class="btn btn-primary btn-block" type="submit">Войти ${icon('arrow', 17, 2.4)}</button>
@@ -78,7 +83,12 @@ export async function render(root, { onLogin }) {
             <small class="field-error" data-error="login"></small>
           </label>
           <label class="field"><span>Пароль</span>
-            <input class="input" name="password" type="password" autocomplete="new-password" minlength="6" required>
+            <div class="input-wrap">
+              <input class="input" name="password" type="password" autocomplete="new-password" minlength="6" required>
+              <button class="input-eye-btn" type="button" data-act="toggle-password" aria-label="Показать пароль" title="Показать пароль">
+                ${icon('eye', 18, 2)}
+              </button>
+            </div>
             <small class="hint">Не короче 6 символов</small>
             <small class="field-error" data-error="password"></small>
           </label>
@@ -105,11 +115,38 @@ export async function render(root, { onLogin }) {
     mode = next;
     root.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === mode)));
     root.querySelectorAll('[data-form]').forEach((f) => { f.hidden = f.dataset.form !== mode; });
+    root.querySelectorAll('input[name="password"]').forEach((input) => {
+      if (input.type === 'text') {
+        input.type = 'password';
+        const eye = input.closest('.input-wrap')?.querySelector('[data-act="toggle-password"]');
+        if (eye) {
+          eye.innerHTML = icon('eye', 18, 2);
+          eye.setAttribute('aria-label', 'Показать пароль');
+          eye.setAttribute('title', 'Показать пароль');
+        }
+      }
+    });
     setError('');
     root.querySelector(`[data-form="${mode}"] input`)?.focus();
   };
 
   const onClick = async (e) => {
+    const toggleEye = e.target.closest('[data-act="toggle-password"]');
+    if (toggleEye) {
+      const wrap = toggleEye.closest('.input-wrap');
+      const input = wrap?.querySelector('input[name="password"]');
+      if (input) {
+        const isPass = input.type === 'password';
+        input.type = isPass ? 'text' : 'password';
+        toggleEye.innerHTML = icon(isPass ? 'eyeOff' : 'eye', 18, 2);
+        const label = isPass ? 'Скрыть пароль' : 'Показать пароль';
+        toggleEye.setAttribute('aria-label', label);
+        toggleEye.setAttribute('title', label);
+        input.focus();
+      }
+      return;
+    }
+
     const tab = e.target.closest('[data-mode]');
     if (tab) return switchMode(tab.dataset.mode);
     const demo = e.target.closest('[data-demo]');
